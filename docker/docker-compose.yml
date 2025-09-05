@@ -1,4 +1,4 @@
-version: '3.1'
+# version: '3.1'
 
 services:
   db:
@@ -21,7 +21,7 @@ services:
       PMA_HOST: db
       PMA_PORT: 3306
       PMA_USER: root
-      PMA_PASSWORD: '' # vì bạn không đặt password
+      PMA_PASSWORD: ''
 
 volumes:
   mysql-data:
