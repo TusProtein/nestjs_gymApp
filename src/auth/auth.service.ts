@@ -1,55 +1,32 @@
 import {
-  BadRequestException,
+  ConflictException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { PrismaService } from 'prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { UserRole } from '@prisma/client';
+import { registerDto } from './dto/register.dto';
+import { UsersService } from '~/users/user.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private usersService: UsersService,
   ) {}
 
-  async getAllUser() {
-    return this.prisma.user.findMany();
-  }
-  async register(name: string, email: string, phone: string, password: string) {
-    const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-    const regexPhone = /^(?:\+84|0)(?:3|5|7|8|9)\d{8}$/;
-    const emailExist = await this.prisma.user.findUnique({ where: { email } });
-    const phoneExist = await this.prisma.user.findUnique({ where: { phone } });
-
-    if (!regexEmail.test(email))
-      throw new BadRequestException('Email không hợp lệ');
-
-    if (!regexPhone.test(phone))
-      throw new BadRequestException('Số điện thoại không hợp lệ');
-
-    // check email ton tai
-    if (emailExist) throw new UnauthorizedException('Email đã tồn tại');
-
-    if (phoneExist) throw new UnauthorizedException('Số điện thoại đã tồn tại');
-
-    const hashed = await bcrypt.hash(password, 10);
-
-    const user = await this.prisma.user.create({
-      data: { name, phone, email, password: hashed },
-      select: {
-        id: true,
-        name: true,
-        phone: true,
-        email: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+  async register(dto: registerDto) {
+    const user = await this.usersService.createUser({
+      ...dto,
+      role: UserRole.MEMBER,
     });
+
     return {
       message: 'Đăng ký thành công',
-      data: user,
+      data: user.user,
     };
   }
 
@@ -60,12 +37,12 @@ export class AuthService {
       },
     });
     if (!user)
-      throw new BadRequestException('Email hoặc số điện thoại không tồn tại');
+      throw new UnauthorizedException('Email hoặc số điện thoại không tồn tại');
 
     const isMatchPassword = await bcrypt.compare(password, user.password);
-    if (!isMatchPassword) throw new BadRequestException('Sai mật khẩu');
+    if (!isMatchPassword) throw new UnauthorizedException('Sai mật khẩu');
 
-    const payload = { id: user.id, phone: user.phone };
+    const payload = { id: user.id, phone: user.phone, role: user.role };
     const { password: safePassword, ...userRes } = user;
 
     return {

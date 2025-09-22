@@ -13,7 +13,10 @@
     "experimentalDecorators": true,
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./",
+    "baseUrl": "./src",
+    "paths": {
+      "~/*": ["*"]
+    },
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
