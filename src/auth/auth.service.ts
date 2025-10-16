@@ -1,32 +1,69 @@
 import {
-  ConflictException,
+  BadRequestException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { UserRole } from '@prisma/client';
-import { registerDto } from './dto/register.dto';
-import { UsersService } from '~/users/user.service';
+import * as bcrypt from 'bcrypt';
+import validateAndHashPassword from '~/common/utils/validators';
 import { PrismaService } from '../../prisma/prisma.service';
+import { registerDto } from './dto/register.dto';
 
 @Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private usersService: UsersService,
   ) {}
 
-  async register(dto: registerDto) {
-    const user = await this.usersService.createUser({
-      ...dto,
-      role: UserRole.MEMBER,
+  async selfRegister(dto: registerDto) {
+    const { name, email, phone, password, dateOfBirth, gymId } = dto;
+
+    if (!gymId) throw new BadRequestException('Vui lòng chọn phòng gym');
+
+    const gym = await this.prisma.gym.findFirst({
+      where: { id: gymId, isActive: true },
+    });
+
+    if (!gym)
+      throw new BadRequestException(
+        'Phòng gym không tồn tại hoặc đã bị vô hiệu hóa',
+      );
+
+    const hashed = await validateAndHashPassword(
+      this.prisma,
+      email,
+      phone,
+      password,
+    );
+
+    const user = await this.prisma.user.create({
+      data: {
+        name,
+        email,
+        phone,
+        password: hashed,
+        dateOfBirth: new Date(dateOfBirth),
+        role: UserRole.MEMBER,
+        gymId,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        dateOfBirth: true,
+        role: true,
+        gymId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     return {
       message: 'Đăng ký thành công',
-      data: user.user,
+      data: user,
     };
   }
 
@@ -42,7 +79,12 @@ export class AuthService {
     const isMatchPassword = await bcrypt.compare(password, user.password);
     if (!isMatchPassword) throw new UnauthorizedException('Sai mật khẩu');
 
-    const payload = { id: user.id, phone: user.phone, role: user.role };
+    const payload = {
+      id: user.id,
+      phone: user.phone,
+      role: user.role,
+      gymId: user.gymId,
+    };
     const { password: safePassword, ...userRes } = user;
 
     return {

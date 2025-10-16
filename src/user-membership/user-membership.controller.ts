@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Patch,
   Param,
   ParseIntPipe,
   Post,
@@ -13,7 +14,7 @@ import { JwtAuthGuard } from '~/common/guard/jwt-auth.guard';
 import { UserMembershipService } from './user-membership.service';
 import { RolesGuard } from '~/common/guard/roles.guard';
 import { Roles } from '~/common/decorator/roles.decorator';
-import { UserRole } from '@prisma/client';
+import { PaymentStatus, UserRole } from '@prisma/client';
 import type { AuthenticatedRequest } from '~/common/interfaces/authenticated-request';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -44,5 +45,15 @@ export class UserMembershipController {
   @Get(':userId')
   findByUser(@Param('userId', ParseIntPipe) userId: number) {
     return this.userMembershipService.findByUser(userId);
+  }
+
+  // Admin update paymentStatus
+  @Roles(UserRole.ADMIN)
+  @Patch(':id/status')
+  updatePaymentStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body('paymentStatus') paymentStatus: PaymentStatus,
+  ) {
+    return this.userMembershipService.updatePaymentStatus(id, paymentStatus);
   }
 }

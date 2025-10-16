@@ -1,4 +1,11 @@
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+  IsInt,
+  IsOptional,
+} from 'class-validator';
 import { BaseUserDto } from '~/common/dto/base-user.dto';
 import { Match } from '../../common/decorator/match.decorator';
 
@@ -14,4 +21,8 @@ export class registerDto extends BaseUserDto {
   @IsString()
   @Match('password', { message: 'Nhập lại mật khẩu không đúng' })
   passwordConfirm!: string;
+
+  @IsOptional()
+  @IsInt()
+  gymId?: number;
 }

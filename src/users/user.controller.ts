@@ -1,5 +1,4 @@
 // for Admin
-
 import {
   Body,
   Controller,
@@ -9,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './user.service';
@@ -18,6 +18,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { Roles } from '~/common/decorator/roles.decorator';
 import { UserRole } from '@prisma/client';
 import { UpdateUserDto } from './dto/update-user.dto';
+import type { AuthenticatedRequest } from '~/common/interfaces/authenticated-request';
 
 @Controller('v1/api/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,8 +27,8 @@ export class UserController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  create(@Body() dto: CreateUserDto) {
-    return this.usersService.createUser(dto);
+  create(@Body() dto: CreateUserDto, @Req() req: AuthenticatedRequest) {
+    return this.usersService.createUserByAdmin(dto, req.user);
   }
 
   @Get()

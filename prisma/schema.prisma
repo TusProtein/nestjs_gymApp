@@ -14,6 +14,7 @@ datasource db {
 }
 
 enum UserRole {
+  SUPER_ADMIN
   ADMIN
   PT
   MEMBER  
@@ -25,6 +26,16 @@ enum PaymentStatus{
   CANCELLED
 }
 
+model Gym {
+  id Int @id @default(autoincrement())
+  name String @unique
+  address String?
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+}
 
 model User  {
   id Int @id @default(autoincrement())
@@ -36,6 +47,9 @@ model User  {
   role UserRole @default(MEMBER)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  gymId Int?
+  gym Gym? @relation(fields: [gymId], references: [id])
 
   workoutPlanAsMember WorkoutPlan[] @relation("MemberPlans")
   workoutPlanAsPT WorkoutPlan[] @relation("PtPlans")
@@ -80,6 +94,7 @@ model UserMembership{
   planId Int
   startDate DateTime @default(now())
   endDate DateTime
+  finalPrice Float @default(0.0)
   paymentStatus PaymentStatus @default(PENDING) // "pending" | "paid" | "cancelled"
   isActive Boolean @default(true)
   createdAt DateTime @default(now())
