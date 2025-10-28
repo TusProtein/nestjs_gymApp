@@ -1,7 +1,12 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { PaymentStatus } from '@prisma/client';
-import { addDays } from 'date-fns';
+import { PaymentStatus, UserRole } from '@prisma/client';
+import { addDays, differenceInDays } from 'date-fns';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
@@ -25,7 +30,12 @@ export class UserMembershipService {
 
     this.logger.debug(`Vô hiệu hóa ${result.count} user memberships`);
   }
-  async registerPlan(userId: number, planId: number) {
+  async registerPlan(
+    userId: number,
+    planId: number,
+    gymId: number,
+    ptId?: number,
+  ) {
     const plan = await this.prisma.membershipPlan.findUnique({
       where: { id: planId },
     });
@@ -34,30 +44,64 @@ export class UserMembershipService {
       throw new BadRequestException('Gói tập không có sẵn');
     }
 
-    const duplicate = await this.prisma.userMembership.findFirst({
-      where: {
-        userId,
-        planId,
-        endDate: { gt: new Date() },
-      },
-    });
+    const [duplicate, active] = await Promise.all([
+      this.prisma.userMembership.findFirst({
+        where: {
+          userId,
+          planId,
+          endDate: { gt: new Date() },
+        },
+      }),
+      this.prisma.userMembership.findFirst({
+        where: {
+          userId,
+          isActive: true,
+          paymentStatus: PaymentStatus.PAID,
+          endDate: { gt: new Date() },
+        },
+      }),
+    ]);
 
     if (duplicate)
       throw new BadRequestException('Người dùng đã đăng ký gói này trước đó');
-
-    const active = await this.prisma.userMembership.findFirst({
-      where: {
-        userId,
-        isActive: true,
-        paymentStatus: PaymentStatus.PAID,
-        endDate: { gt: new Date() },
-      },
-    });
 
     if (active)
       throw new BadRequestException(
         'Người dùng đã có một gói tập đang hoạt động',
       );
+
+    // Tìm các PT có sẵn trong gym
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { gym: true },
+    });
+
+    if (!user || !user.gymId)
+      throw new BadRequestException('Người dùng chưa thuộc phòng gym nào');
+
+    let assignedPtId = ptId;
+
+    if (ptId) {
+      const pt = await this.prisma.user.findUnique({ where: { id: ptId } });
+
+      if (!pt || pt.role !== UserRole.PT || pt.gymId !== user.gymId) {
+        throw new BadRequestException('PT không hợp lệ hoặc không cùng gym');
+      }
+    } else {
+      const availablePts = await this.prisma.user.findMany({
+        where: { gymId: user.gymId, role: UserRole.PT },
+      });
+
+      if (availablePts.length === 0) {
+        throw new BadRequestException(
+          'Không có PT nào khả dụng trong phòng gym',
+        );
+      }
+      const randomPt =
+        availablePts[Math.floor(Math.random() * availablePts.length)];
+
+      assignedPtId = randomPt.id;
+    }
 
     const startDate = new Date();
     const endDate = addDays(startDate, plan.durationInDays);
@@ -66,17 +110,38 @@ export class UserMembershipService {
       ? Number(plan.price) * (1 - plan.discount / 100)
       : Number(plan.price);
 
-    return this.prisma.userMembership.create({
+    const membership = await this.prisma.userMembership.create({
       data: {
         userId,
         planId,
+        ptId: assignedPtId,
         startDate,
         endDate,
         finalPrice,
         paymentStatus: PaymentStatus.PAID, // giả lập thanh toán
         isActive: true,
       },
+      include: {
+        plan: true,
+        pt: { select: { id: true, name: true } },
+      },
     });
+
+    await this.prisma.subcription.create({
+      data: {
+        userId,
+        planId,
+        gymId,
+        totalPrice: finalPrice,
+        startDate,
+        endDate,
+      },
+    });
+
+    return {
+      message: 'Đăng ký gói tập thành công',
+      data: membership,
+    };
   }
 
   //  Lấy dsach gói mà user đã đăng ký
@@ -87,11 +152,12 @@ export class UserMembershipService {
         user: { select: { name: true } },
         plan: true,
       },
+      orderBy: { startDate: 'desc' },
     });
   }
 
   updatePaymentStatus(id: number, paymentStatus: PaymentStatus) {
-    const validStatuses = ['PENDING', 'PAID', 'CANCELLED'];
+    const validStatuses = Object.values(PaymentStatus);
 
     if (!validStatuses.includes(paymentStatus)) {
       throw new BadRequestException('Invalid payment status');
@@ -105,5 +171,47 @@ export class UserMembershipService {
         plan: true,
       },
     });
+  }
+
+  // Láy các gói tập còn hoạt động của user
+  async getActiveUsers(gymId: number, userId: number, role: UserRole) {
+    const now = new Date();
+
+    const whereConditons: any = {
+      isActive: true,
+      paymentStatus: PaymentStatus.PAID,
+      endDate: { gt: now },
+    };
+
+    if (role === UserRole.PT) {
+      whereConditons.ptId = userId;
+    }
+
+    if (role === UserRole.ADMIN) {
+      whereConditons.user = { gymId };
+    }
+
+    const memberships = await this.prisma.userMembership.findMany({
+      where: whereConditons,
+      include: {
+        user: { select: { id: true, name: true } },
+        plan: { select: { id: true, name: true } },
+        pt: { select: { id: true, name: true } },
+      },
+      orderBy: { endDate: 'asc' },
+    });
+
+    if (memberships.length === 0)
+      throw new NotFoundException('Không tìm thấy gói tập đang hoạt động nào');
+
+    return memberships.map((m) => ({
+      userId: m.user.id,
+      userName: m.user.name,
+      planName: m.plan.name,
+      ptName: m.pt?.name ?? 'Chưa có PT',
+      startDate: m.startDate,
+      endDate: m.endDate,
+      daysLeft: differenceInDays(m.endDate, now),
+    }));
   }
 }

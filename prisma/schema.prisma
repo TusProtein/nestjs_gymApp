@@ -35,6 +35,7 @@ model Gym {
   updatedAt DateTime @updatedAt
 
   users User[]
+  subcriptions Subcription[]
 }
 
 model User  {
@@ -55,6 +56,12 @@ model User  {
   workoutPlanAsPT WorkoutPlan[] @relation("PtPlans")
 
   memberships UserMembership[]
+  membershipAsPt UserMembership[] @relation("MemberShip_PT")
+
+  scheduleAsPT Schedule[] @relation("PT_Schedules")
+  scheduleAsMember Schedule[] @relation("Member_Schedules")
+
+  subcriptions Subcription[]
    @@map("User")
 }
 
@@ -85,6 +92,7 @@ model MembershipPlan{
   updatedAt DateTime @updatedAt
 
   memberships UserMembership[]
+  subcriptions Subcription[]
 
 }
 
@@ -92,6 +100,8 @@ model UserMembership{
   id Int @id @default(autoincrement())
   userId Int
   planId Int
+  ptId Int?
+
   startDate DateTime @default(now())
   endDate DateTime
   finalPrice Float @default(0.0)
@@ -102,7 +112,44 @@ model UserMembership{
 
   user User @relation(fields: [userId], references: [id])
   plan MembershipPlan @relation(fields: [planId], references: [id])
+  pt User? @relation("MemberShip_PT", fields: [ptId], references: [id])
 
   @@index([userId])
   @@index([planId])
+  @@index([ptId])
+}
+
+model Schedule{
+  id Int @id @default(autoincrement())
+  ptId Int
+  memberId Int
+  startTime DateTime
+  endTime DateTime
+  status String @default("Scheduled") // Scheduled | Completed | Cancelled
+  pt User @relation("PT_Schedules", fields: [ptId], references: [id])
+  member User @relation("Member_Schedules", fields: [memberId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Subcription {
+  id Int @id @default(autoincrement())
+  userId Int
+  user User @relation(fields: [userId], references: [id])
+
+  planId Int
+  membershipPlan MembershipPlan @relation(fields: [planId], references: [id])
+
+  gymId Int
+  gym Gym @relation(fields: [gymId], references: [id])
+
+
+  startDate DateTime
+  endDate DateTime
+
+  totalPrice Int
+  // paymentId Int? 
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+
 }

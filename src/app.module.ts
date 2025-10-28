@@ -9,17 +9,21 @@ import { MembershipPlanModule } from './membership-plan/membership-plan.module';
 import { UserMembershipModule } from './user-membership/user-membership.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { GymModule } from './gym/gym.module';
+import { SchedulesModule } from './schedules/schedules.module';
+import { RevenueModule } from './revenue/revenue.module';
 
 @Module({
   imports: [
     PrismaModule,
-    ScheduleModule.forRoot(), //  bật cron jobs
+    // ScheduleModule.forRoot(), //  bật cron jobs
     AuthModule,
     UserModule,
     WorkoutPlansModule,
     MembershipPlanModule,
     UserMembershipModule,
     GymModule,
+    SchedulesModule,
+    RevenueModule,
   ],
   controllers: [AppController],
   providers: [AppService],

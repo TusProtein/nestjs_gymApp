@@ -29,8 +29,13 @@ export class UserMembershipController {
     @Body() dto: RegisterUserMembershipDto,
   ) {
     const userId = req.user.id;
-    const planId = dto.planId;
-    return this.userMembershipService.registerPlan(userId, planId);
+    const gymId = Number(req.user.gymId);
+    return this.userMembershipService.registerPlan(
+      userId,
+      dto.planId,
+      gymId,
+      dto.ptId,
+    );
   }
 
   //// Member tự lấy danh sách gói tập của chính mình
@@ -55,5 +60,12 @@ export class UserMembershipController {
     @Body('paymentStatus') paymentStatus: PaymentStatus,
   ) {
     return this.userMembershipService.updatePaymentStatus(id, paymentStatus);
+  }
+
+  @Roles(UserRole.ADMIN, UserRole.PT)
+  @Get('users/active')
+  getActiveUsers(@Req() req: AuthenticatedRequest) {
+    const { id: userId, gymId, role } = req.user;
+    return this.userMembershipService.getActiveUsers(gymId, userId, role);
   }
 }
