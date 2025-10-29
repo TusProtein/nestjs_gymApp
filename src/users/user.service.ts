@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -69,15 +70,32 @@ export class UsersService {
     };
   }
 
-  async findAll() {
+  async findAll(gymId: number) {
     return this.prisma.user.findMany({
+      where: { gymId },
       select: this.userSelect,
       orderBy: { createdAt: 'desc' },
     });
   }
 
   // Update User
-  async updateUser(id: number, dto: UpdateUserDto) {
+  async updateUser(id: number, dto: UpdateUserDto, gymId: number) {
+    const { email, phone } = dto;
+
+    const user = await this.prisma.user.findUnique({ where: { id } });
+
+    if (!user) throw new BadRequestException('Không tìm thấy người dùng');
+    if (user.gymId !== gymId)
+      throw new BadRequestException('Không thể cập nhật người dùng này');
+
+    const [emailExist, phoneExist] = await Promise.all([
+      this.prisma.user.findFirst({ where: { email, NOT: { id } } }),
+      this.prisma.user.findFirst({ where: { phone, NOT: { id } } }),
+    ]);
+
+    if (emailExist) throw new ConflictException('Email đã tồn tại');
+    if (phoneExist) throw new ConflictException('Số điện thoại đã tồn tại');
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: { ...dto },
@@ -92,22 +110,20 @@ export class UsersService {
   }
 
   // Delete User
-  async deleteUser(id: number) {
-    try {
-      const deletedUser = await this.prisma.user.delete({
-        where: { id },
-        select: { id: true, email: true },
-      });
+  async deleteUser(id: number, gymId: number) {
+    const user = await this.prisma.user.findFirst({ where: { id, gymId } });
 
-      return {
-        success: true,
-        message: 'User deleted successfully',
-        data: deletedUser,
-      };
-    } catch (error) {
-      console.log(error);
+    if (!user) throw new BadRequestException('Không tìm thấy người dùng này');
 
-      throw new NotFoundException(`User with id ${id} not found`);
-    }
+    const deletedUser = await this.prisma.user.delete({
+      where: { id },
+      select: { id: true, email: true },
+    });
+
+    return {
+      success: true,
+      message: 'User deleted successfully',
+      data: deletedUser,
+    };
   }
 }

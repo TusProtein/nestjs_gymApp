@@ -36,6 +36,7 @@ model Gym {
 
   users User[]
   subcriptions Subcription[]
+  membershipPlans MembershipPlan[]
 }
 
 model User  {
@@ -88,6 +89,8 @@ model MembershipPlan{
   description String?
   discount Int? @default(0)
   isActive Boolean @default(true)
+  gymId Int
+  gym Gym @relation(fields: [gymId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

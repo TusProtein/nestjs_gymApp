@@ -32,20 +32,24 @@ export class UserController {
   }
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Req() req: AuthenticatedRequest) {
+    return this.usersService.findAll(req.user.gymId);
   }
 
   @Patch(':id')
   updateUser(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateUserDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.usersService.updateUser(id, dto);
+    return this.usersService.updateUser(id, dto, req.user.gymId);
   }
 
   @Delete(':id')
-  deleteUser(@Param('id', ParseIntPipe) id: number) {
-    return this.usersService.deleteUser(id);
+  deleteUser(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.usersService.deleteUser(id, req.user.gymId);
   }
 }
