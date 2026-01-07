@@ -28,10 +28,10 @@ export class UserMembershipController {
     @Req() req: AuthenticatedRequest,
     @Body() dto: RegisterUserMembershipDto,
   ) {
-    const userId = req.user.id;
+    const memberId = req.user.id;
     const gymId = Number(req.user.gymId);
     return this.userMembershipService.registerPlan(
-      userId,
+      memberId,
       dto.planId,
       gymId,
       dto.ptId,
@@ -47,9 +47,9 @@ export class UserMembershipController {
 
   // Admin lấy danh sách gói tập của khách hàng
   @Roles(UserRole.ADMIN)
-  @Get(':userId')
-  findByUser(@Param('userId', ParseIntPipe) userId: number) {
-    return this.userMembershipService.findByUser(userId);
+  @Get(':memberId')
+  findByUser(@Param('memberId', ParseIntPipe) memberId: number) {
+    return this.userMembershipService.findByUser(memberId);
   }
 
   // Admin update paymentStatus
@@ -65,7 +65,7 @@ export class UserMembershipController {
   @Roles(UserRole.ADMIN, UserRole.PT)
   @Get('users/active')
   getActiveUsers(@Req() req: AuthenticatedRequest) {
-    const { id: userId, gymId, role } = req.user;
-    return this.userMembershipService.getActiveUsers(gymId, userId, role);
+    const { id: memberId, gymId, role } = req.user;
+    return this.userMembershipService.getActiveUsers(gymId, memberId, role);
   }
 }

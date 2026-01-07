@@ -31,7 +31,7 @@ export class UserMembershipService {
     this.logger.debug(`Vô hiệu hóa ${result.count} user memberships`);
   }
   async registerPlan(
-    userId: number,
+    memberId: number,
     planId: number,
     gymId: number,
     ptId?: number,
@@ -47,14 +47,14 @@ export class UserMembershipService {
     const [duplicate, active] = await Promise.all([
       this.prisma.userMembership.findFirst({
         where: {
-          userId,
+          memberId,
           planId,
           endDate: { gt: new Date() },
         },
       }),
       this.prisma.userMembership.findFirst({
         where: {
-          userId,
+          memberId,
           isActive: true,
           paymentStatus: PaymentStatus.PAID,
           endDate: { gt: new Date() },
@@ -72,7 +72,7 @@ export class UserMembershipService {
 
     // Tìm các PT có sẵn trong gym
     const user = await this.prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: memberId },
       include: { gym: true },
     });
 
@@ -112,7 +112,7 @@ export class UserMembershipService {
 
     const membership = await this.prisma.userMembership.create({
       data: {
-        userId,
+        memberId,
         planId,
         ptId: assignedPtId,
         startDate,
@@ -129,7 +129,7 @@ export class UserMembershipService {
 
     await this.prisma.subcription.create({
       data: {
-        userId,
+        memberId,
         planId,
         gymId,
         totalPrice: finalPrice,
@@ -145,11 +145,11 @@ export class UserMembershipService {
   }
 
   //  Lấy dsach gói mà user đã đăng ký
-  async findByUser(userId: number) {
+  async findByUser(memberId: number) {
     return this.prisma.userMembership.findMany({
-      where: { userId },
+      where: { memberId },
       include: {
-        user: { select: { name: true } },
+        member: { select: { name: true } },
         plan: true,
       },
       orderBy: { startDate: 'desc' },
@@ -167,14 +167,14 @@ export class UserMembershipService {
       where: { id },
       data: { paymentStatus },
       include: {
-        user: true,
+        member: true,
         plan: true,
       },
     });
   }
 
   // Láy các gói tập còn hoạt động của user
-  async getActiveUsers(gymId: number, userId: number, role: UserRole) {
+  async getActiveUsers(gymId: number, memberId: number, role: UserRole) {
     const now = new Date();
 
     const whereConditons: any = {
@@ -184,7 +184,7 @@ export class UserMembershipService {
     };
 
     if (role === UserRole.PT) {
-      whereConditons.ptId = userId;
+      whereConditons.ptId = memberId;
     }
 
     if (role === UserRole.ADMIN) {
@@ -194,7 +194,7 @@ export class UserMembershipService {
     const memberships = await this.prisma.userMembership.findMany({
       where: whereConditons,
       include: {
-        user: { select: { id: true, name: true } },
+        member: { select: { id: true, name: true } },
         plan: { select: { id: true, name: true } },
         pt: { select: { id: true, name: true } },
       },
@@ -205,8 +205,8 @@ export class UserMembershipService {
       throw new NotFoundException('Không tìm thấy gói tập đang hoạt động nào');
 
     return memberships.map((m) => ({
-      userId: m.user.id,
-      userName: m.user.name,
+      memberId: m?.member?.id,
+      userName: m?.member?.name,
       planName: m.plan.name,
       ptName: m.pt?.name ?? 'Chưa có PT',
       startDate: m.startDate,

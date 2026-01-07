@@ -1,7 +1,9 @@
-# version: '3.1'
+version: '3.1'
+
 services:
   db:
     image: mysql:8
+    # container_name: mysql-gym
     restart: always
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
@@ -13,14 +15,17 @@ services:
 
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
+    container_name: phpmyadmin-gym
     restart: always
     ports:
       - '8080:80'
     environment:
-      PMA_HOST: db
+      PMA_HOST: db # phải đúng tên service MySQL
       PMA_PORT: 3306
       PMA_USER: root
       PMA_PASSWORD: ''
+    depends_on:
+      - db # phpMyAdmin sẽ chờ db start trước
 
 volumes:
   mysql-data:

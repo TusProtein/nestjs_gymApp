@@ -1,158 +1,174 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-   provider = "mysql"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
+
+model Gym {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  address         String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  isActive        Boolean          @default(true)
+  membershipPlans MembershipPlan[]
+  subcriptions    Subcription[]
+  users           User[]
+  workoutProgress WorkoutProgress[]
+}
+
+model User {
+  name                String
+  id                  Int              @id @default(autoincrement())
+  email               String           @unique
+  phone               String           @unique
+  password            String
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  role                UserRole         @default(MEMBER)
+  dateOfBirth         DateTime
+  gymId               Int?
+  scheduleAsMember    Schedule[]       @relation("Member_Schedules")
+  scheduleAsPT        Schedule[]       @relation("PT_Schedules")
+  Subcription         Subcription[]
+  gym                 Gym?             @relation(fields: [gymId], references: [id])
+
+  membershipAsPt      UserMembership[] @relation("MemberShip_PT")
+  membershipAsMember     UserMembership[] @relation("MemberShip_MEMBER")
+  workoutPlanAsMember WorkoutPlan[]    @relation("MemberPlans")
+  workoutPlanAsPT     WorkoutPlan[]    @relation("PtPlans")
+  workoutProgressAsMember WorkoutProgress[] @relation("Member_WorkoutProgress")
+  workoutProgressAsPT WorkoutProgress[] @relation("Pt_WorkoutProgress")
+
+  @@index([gymId], map: "User_gymId_fkey")
+  @@map("User")
+}
+
+model WorkoutPlan {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  date      DateTime
+  memberId  Int
+  ptId      Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member    User     @relation("MemberPlans", fields: [memberId], references: [id])
+  pt        User     @relation("PtPlans", fields: [ptId], references: [id])
+
+  @@index([memberId], map: "WorkoutPlan_memberId_fkey")
+  @@index([ptId], map: "WorkoutPlan_ptId_fkey")
+}
+
+model MembershipPlan {
+  id             Int              @id @default(autoincrement())
+  name           String           @unique
+  price          Decimal          @db.Decimal(12, 2)
+  durationInDays Int
+  description    String?
+  discount       Int?             @default(0)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  gymId          Int
+  gym            Gym              @relation(fields: [gymId], references: [id])
+  subcriptions   Subcription[]
+  memberships    UserMembership[]
+
+  @@index([gymId], map: "MembershipPlan_gymId_fkey")
+}
+
+model UserMembership {
+  id            Int            @id @default(autoincrement())
+  planId        Int
+  startDate     DateTime       @default(now())
+  endDate       DateTime
+  paymentStatus PaymentStatus  @default(PENDING)
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  finalPrice    Float          @default(0)
+  ptId          Int?
+  memberId      Int
+
+  plan          MembershipPlan @relation(fields: [planId], references: [id])
+  pt            User?          @relation("MemberShip_PT", fields: [ptId], references: [id])
+  member User? @relation("MemberShip_MEMBER", fields: [memberId], references: [id])
+
+  @@index([planId])
+  @@index([ptId])
+}
+
+// Lịch tập
+model Schedule {
+  id        Int      @id @default(autoincrement())
+  ptId      Int
+  memberId  Int
+  startTime DateTime
+  endTime   DateTime
+  status    String   @default("Scheduled")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  member    User     @relation("Member_Schedules", fields: [memberId], references: [id])
+  pt        User     @relation("PT_Schedules", fields: [ptId], references: [id])
+
+  @@index([memberId], map: "Schedule_memberId_fkey")
+  @@index([ptId], map: "Schedule_ptId_fkey")
+}
+
+model Subcription {
+  id             Int            @id @default(autoincrement())
+  memberId       Int?
+  planId         Int
+  gymId          Int
+  startDate      DateTime
+  endDate        DateTime
+  totalPrice     Int
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  gym            Gym            @relation(fields: [gymId], references: [id])
+  membershipPlan MembershipPlan @relation(fields: [planId], references: [id])
+  User           User?          @relation(fields: [memberId], references: [id], onDelete: Restrict, map: "Subcription_memberId_fkey")
+
+  @@index([gymId], map: "Subcription_gymId_fkey")
+  @@index([planId], map: "Subcription_planId_fkey")
+  @@index([memberId], map: "Subcription_memberId_fkey")
+}
+
+
+// Tiến độ buổi tập
+model WorkoutProgress {
+  id Int @id @default(autoincrement())
+  memberId Int
+  ptId Int
+  date DateTime @default(now())
+  weight Float?
+  bodyFat Float?
+  muscleMass Float?
+  notes String?
+  performance Json? // {}
+  gymId          Int
+  gym            Gym              @relation(fields: [gymId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  member User @relation("Member_WorkoutProgress",fields: [memberId], references: [id])
+  pt User @relation("Pt_WorkoutProgress",fields: [ptId],  references: [id])
+}
+
 
 enum UserRole {
   SUPER_ADMIN
   ADMIN
   PT
-  MEMBER  
+  MEMBER
 }
 
-enum PaymentStatus{
+enum PaymentStatus {
   PENDING
   PAID
   CANCELLED
-}
-
-model Gym {
-  id Int @id @default(autoincrement())
-  name String @unique
-  address String?
-  isActive Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  users User[]
-  subcriptions Subcription[]
-  membershipPlans MembershipPlan[]
-}
-
-model User  {
-  id Int @id @default(autoincrement())
-  name String
-  email String @unique
-  phone String @unique
-  password String
-  dateOfBirth DateTime
-  role UserRole @default(MEMBER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  gymId Int?
-  gym Gym? @relation(fields: [gymId], references: [id])
-
-  workoutPlanAsMember WorkoutPlan[] @relation("MemberPlans")
-  workoutPlanAsPT WorkoutPlan[] @relation("PtPlans")
-
-  memberships UserMembership[]
-  membershipAsPt UserMembership[] @relation("MemberShip_PT")
-
-  scheduleAsPT Schedule[] @relation("PT_Schedules")
-  scheduleAsMember Schedule[] @relation("Member_Schedules")
-
-  subcriptions Subcription[]
-   @@map("User")
-}
-
-model WorkoutPlan {
-  id Int @id @default(autoincrement())
-  title String
-  content String
-  date DateTime
-
-  memberId Int
-  ptId Int
-
-  member User @relation("MemberPlans", fields: [memberId], references: [id])
-  pt User @relation("PtPlans", fields: [ptId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model MembershipPlan{
-  id Int @id @default(autoincrement())
-  name String @unique
-  price Decimal @db.Decimal(12,2)
-  durationInDays Int
-  description String?
-  discount Int? @default(0)
-  isActive Boolean @default(true)
-  gymId Int
-  gym Gym @relation(fields: [gymId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  memberships UserMembership[]
-  subcriptions Subcription[]
-
-}
-
-model UserMembership{
-  id Int @id @default(autoincrement())
-  userId Int
-  planId Int
-  ptId Int?
-
-  startDate DateTime @default(now())
-  endDate DateTime
-  finalPrice Float @default(0.0)
-  paymentStatus PaymentStatus @default(PENDING) // "pending" | "paid" | "cancelled"
-  isActive Boolean @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id])
-  plan MembershipPlan @relation(fields: [planId], references: [id])
-  pt User? @relation("MemberShip_PT", fields: [ptId], references: [id])
-
-  @@index([userId])
-  @@index([planId])
-  @@index([ptId])
-}
-
-model Schedule{
-  id Int @id @default(autoincrement())
-  ptId Int
-  memberId Int
-  startTime DateTime
-  endTime DateTime
-  status String @default("Scheduled") // Scheduled | Completed | Cancelled
-  pt User @relation("PT_Schedules", fields: [ptId], references: [id])
-  member User @relation("Member_Schedules", fields: [memberId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Subcription {
-  id Int @id @default(autoincrement())
-  userId Int
-  user User @relation(fields: [userId], references: [id])
-
-  planId Int
-  membershipPlan MembershipPlan @relation(fields: [planId], references: [id])
-
-  gymId Int
-  gym Gym @relation(fields: [gymId], references: [id])
-
-
-  startDate DateTime
-  endDate DateTime
-
-  totalPrice Int
-  // paymentId Int? 
-  isActive Boolean @default(true)
-  createdAt DateTime @default(now())
-
 }

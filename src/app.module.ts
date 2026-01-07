@@ -11,6 +11,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { GymModule } from './gym/gym.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { RevenueModule } from './revenue/revenue.module';
+import { WorkoutProgressModule } from './workout-progress/workout-progress.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { RevenueModule } from './revenue/revenue.module';
     GymModule,
     SchedulesModule,
     RevenueModule,
+    WorkoutProgressModule,
   ],
   controllers: [AppController],
   providers: [AppService],

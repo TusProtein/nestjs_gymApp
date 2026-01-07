@@ -10,9 +10,12 @@ import { RevenueService } from './revenue.service';
 import type { AuthenticatedRequest } from '~/common/interfaces/authenticated-request';
 import { JwtAuthGuard } from '~/common/guard/jwt-auth.guard';
 import { RolesGuard } from '~/common/guard/roles.guard';
+import { UserRole } from '@prisma/client';
+import { Roles } from '~/common/decorator/roles.decorator';
 
 @Controller('revenue')
 @UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.ADMIN)
 export class RevenueController {
   constructor(private readonly revenueService: RevenueService) {}
 

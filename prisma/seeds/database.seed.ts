@@ -3,6 +3,15 @@ import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 async function main() {
+  const gym = await prisma.gym.upsert({
+    where: { name: 'Default Gym' },
+    update: {},
+    create: {
+      name: 'Default Gym',
+      address: '123 Main St',
+    },
+  });
+
   //SuperAdmin
   const hashedSuperAdmin = await bcrypt.hash('superadmin888', 10);
   await prisma.user.upsert({
@@ -33,36 +42,40 @@ async function main() {
       phone: '0912345678',
       password: hashedAdmin,
       role: UserRole.ADMIN,
+      gymId: 1,
     },
   });
 
   // //PT
-  // const hashedPT = await bcrypt.hash('pt888', 10);
-  // await prisma.user.upsert({
-  //   where: {
-  //     email: 'pt@gym.com',
-  //   },
-  //   update: {},
-  //   create: {
-  //     email: 'pt@gym.com',
-  //     dateOfBirth: '',
-  //     phone: '0964532001',
-  //     name: 'LL',
-  //     password: hashedPT,
-  //     role: UserRole.PT,
-  //   },
-  // });
+  const hashedPT = await bcrypt.hash('pt888', 10);
+  await prisma.user.upsert({
+    where: {
+      email: 'pt@gym.com',
+    },
+    update: {},
+    create: {
+      email: 'pt@gym.com',
+      dateOfBirth: new Date('1998-08-20'),
+      phone: '0964532001',
+      name: 'PT Gym1',
+      password: hashedPT,
+      role: UserRole.PT,
+      gymId: 1,
+    },
+  });
 
-  // const user = await prisma.user.create({
-  //   data: {
-  //     name: 'Tuspro',
-  //     phone: '0964423001',
-  //     dateOfBirth: '',
-
-  //     password: '999999999',
-  //     email: 'maitu2923124@gmail.com',
-  //   },
-  // });
+  const user = await prisma.user.upsert({
+    where: { email: 'maitu2923124@gmail.com' },
+    update: {},
+    create: {
+      name: 'Tuspro',
+      phone: '0964423001',
+      dateOfBirth: new Date('2001-06-10'),
+      password: '999999999',
+      email: 'maitu2923124@gmail.com',
+      gymId: 1,
+    },
+  });
 }
 main()
   .then(async () => {

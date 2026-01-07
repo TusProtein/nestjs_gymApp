@@ -42,7 +42,10 @@ export class WorkoutPlansService {
       },
     });
 
-    return data;
+    return {
+      message: 'Tạo lịch tập thành công',
+      data,
+    };
   }
 
   async findById(id: number) {

@@ -1,2 +1,0 @@
--- AlterTable
-ALTER TABLE `WorkoutPlan` ADD COLUMN `role` ENUM('ADMIN', 'PT', 'MEMBER') NOT NULL DEFAULT 'MEMBER';
