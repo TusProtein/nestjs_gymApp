@@ -16,15 +16,40 @@ import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import type { AuthenticatedRequest } from '~/common/interfaces/authenticated-request';
 import { JwtAuthGuard } from '~/common/guard/jwt-auth.guard';
 import { RolesGuard } from '~/common/guard/roles.guard';
+import { Roles } from '~/common/decorator/roles.decorator';
+import { UserRole, Weekday } from '@prisma/client';
+import { AvailablePtDto } from './dto/available-pt.dto';
 
-// @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('schedules')
 export class SchedulesController {
   constructor(private readonly schedulesService: SchedulesService) {}
-
+  @Roles(UserRole.ADMIN, UserRole.PT)
   @Post()
-  create(@Body() dto: CreateScheduleDto) {
-    return this.schedulesService.create(dto);
+  create(@Body() dto: CreateScheduleDto, @Req() req: AuthenticatedRequest) {
+    return this.schedulesService.createSchedule(dto, req.user);
+  }
+  @Roles(UserRole.PT)
+  @Post('day-off-pt')
+  setDayOff(@Body() weekdays: Weekday[], @Req() req: AuthenticatedRequest) {
+    return this.schedulesService.setPtDayOff(req.user.id, weekdays);
+  }
+
+  // Xem lịch PT trống
+  @Roles(UserRole.MEMBER)
+  @Post('available-pts')
+  getAvailablePts(
+    @Body() dto: AvailablePtDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.schedulesService.getAvailablePts(dto, req.user);
+  }
+
+  // Member đặt lịch
+  @Roles(UserRole.MEMBER)
+  @Post('book')
+  book(@Body() dto: CreateScheduleDto, @Req() req: AuthenticatedRequest) {
+    return this.schedulesService.createSchedule(dto, req.user);
   }
 
   @Get()
@@ -50,6 +75,23 @@ export class SchedulesController {
     return this.schedulesService.update(id, dto);
   }
 
+  @Post('cancel/:scheduleId')
+  cancelSchedule(
+    @Param('scheduleId', ParseIntPipe) scheduleId: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.schedulesService.cancelSchedule(scheduleId, req.user);
+  }
+
+  @Post('complete/:scheduleId')
+  completeSchedule(
+    @Param('scheduleId', ParseIntPipe) scheduleId: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.schedulesService.completeSchedule(scheduleId, req.user);
+  }
+
+  @Post()
   @Delete(':id')
   async remove(@Param('id', ParseIntPipe) id: number) {
     await this.schedulesService.remove(id);

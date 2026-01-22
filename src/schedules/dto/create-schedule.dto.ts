@@ -1,11 +1,13 @@
-import { IsDateString, IsInt } from 'class-validator';
+import { IsDateString, IsInt, IsOptional } from 'class-validator';
 
 export class CreateScheduleDto {
+  @IsOptional()
   @IsInt()
-  ptId!: number;
+  ptId?: number;
 
+  @IsOptional()
   @IsInt()
-  memberId!: number;
+  memberId?: number;
 
   @IsDateString()
   startTime!: string;

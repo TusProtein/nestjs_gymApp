@@ -8,12 +8,12 @@ datasource db {
 }
 
 model Gym {
-  id              Int              @id @default(autoincrement())
-  name            String           @unique
+  id              Int               @id @default(autoincrement())
+  name            String            @unique
   address         String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  isActive        Boolean          @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  isActive        Boolean           @default(true)
   membershipPlans MembershipPlan[]
   subcriptions    Subcription[]
   users           User[]
@@ -21,27 +21,27 @@ model Gym {
 }
 
 model User {
-  name                String
-  id                  Int              @id @default(autoincrement())
-  email               String           @unique
-  phone               String           @unique
-  password            String
-  createdAt           DateTime         @default(now())
-  updatedAt           DateTime         @updatedAt
-  role                UserRole         @default(MEMBER)
-  dateOfBirth         DateTime
-  gymId               Int?
-  scheduleAsMember    Schedule[]       @relation("Member_Schedules")
-  scheduleAsPT        Schedule[]       @relation("PT_Schedules")
-  Subcription         Subcription[]
-  gym                 Gym?             @relation(fields: [gymId], references: [id])
-
-  membershipAsPt      UserMembership[] @relation("MemberShip_PT")
-  membershipAsMember     UserMembership[] @relation("MemberShip_MEMBER")
-  workoutPlanAsMember WorkoutPlan[]    @relation("MemberPlans")
-  workoutPlanAsPT     WorkoutPlan[]    @relation("PtPlans")
+  name                    String
+  id                      Int               @id @default(autoincrement())
+  email                   String            @unique
+  phone                   String            @unique
+  password                String
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  role                    UserRole          @default(MEMBER)
+  dateOfBirth             DateTime
+  gymId                   Int?
+  ptDayOffAsPT            PtDayOff[]        @relation("PtDayOff")
+  scheduleAsMember        Schedule[]        @relation("Member_Schedules")
+  scheduleAsPT            Schedule[]        @relation("PT_Schedules")
+  Subcription             Subcription[]
+  gym                     Gym?              @relation(fields: [gymId], references: [id])
+  membershipAsMember      UserMembership[]  @relation("MemberShip_MEMBER")
+  membershipAsPt          UserMembership[]  @relation("MemberShip_PT")
+  workoutPlanAsMember     WorkoutPlan[]     @relation("MemberPlans")
+  workoutPlanAsPT         WorkoutPlan[]     @relation("PtPlans")
   workoutProgressAsMember WorkoutProgress[] @relation("Member_WorkoutProgress")
-  workoutProgressAsPT WorkoutProgress[] @relation("Pt_WorkoutProgress")
+  workoutProgressAsPT     WorkoutProgress[] @relation("Pt_WorkoutProgress")
 
   @@index([gymId], map: "User_gymId_fkey")
   @@map("User")
@@ -93,27 +93,29 @@ model UserMembership {
   finalPrice    Float          @default(0)
   ptId          Int?
   memberId      Int
-
+  member        User           @relation("MemberShip_MEMBER", fields: [memberId], references: [id])
   plan          MembershipPlan @relation(fields: [planId], references: [id])
   pt            User?          @relation("MemberShip_PT", fields: [ptId], references: [id])
-  member User? @relation("MemberShip_MEMBER", fields: [memberId], references: [id])
 
   @@index([planId])
   @@index([ptId])
+  @@index([memberId], map: "UserMembership_memberId_fkey")
 }
 
-// Lịch tập
 model Schedule {
-  id        Int      @id @default(autoincrement())
+  id        Int            @id @default(autoincrement())
   ptId      Int
   memberId  Int
   startTime DateTime
   endTime   DateTime
-  status    String   @default("Scheduled")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  member    User     @relation("Member_Schedules", fields: [memberId], references: [id])
-  pt        User     @relation("PT_Schedules", fields: [ptId], references: [id])
+  status    ScheduleStatus @default(BOOKED)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  member    User           @relation("Member_Schedules", fields: [memberId], references: [id])
+  pt        User           @relation("PT_Schedules", fields: [ptId], references: [id])
+  cancelledBy UserRole?
+  cancelledAt DateTime?
+  completedAt DateTime?
 
   @@index([memberId], map: "Schedule_memberId_fkey")
   @@index([ptId], map: "Schedule_ptId_fkey")
@@ -130,35 +132,44 @@ model Subcription {
   isActive       Boolean        @default(true)
   createdAt      DateTime       @default(now())
   gym            Gym            @relation(fields: [gymId], references: [id])
-  membershipPlan MembershipPlan @relation(fields: [planId], references: [id])
   User           User?          @relation(fields: [memberId], references: [id], onDelete: Restrict, map: "Subcription_memberId_fkey")
+  membershipPlan MembershipPlan @relation(fields: [planId], references: [id])
 
   @@index([gymId], map: "Subcription_gymId_fkey")
   @@index([planId], map: "Subcription_planId_fkey")
   @@index([memberId], map: "Subcription_memberId_fkey")
 }
 
-
-// Tiến độ buổi tập
 model WorkoutProgress {
-  id Int @id @default(autoincrement())
-  memberId Int
-  ptId Int
-  date DateTime @default(now())
-  weight Float?
-  bodyFat Float?
-  muscleMass Float?
-  notes String?
-  performance Json? // {}
-  gymId          Int
-  gym            Gym              @relation(fields: [gymId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  memberId    Int
+  ptId        Int
+  date        DateTime @default(now())
+  weight      Float?
+  bodyFat     Float?
+  muscleMass  Float?
+  notes       String?
+  performance Json?
+  gymId       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  gym         Gym      @relation(fields: [gymId], references: [id])
+  member      User     @relation("Member_WorkoutProgress", fields: [memberId], references: [id])
+  pt          User     @relation("Pt_WorkoutProgress", fields: [ptId], references: [id])
 
-  member User @relation("Member_WorkoutProgress",fields: [memberId], references: [id])
-  pt User @relation("Pt_WorkoutProgress",fields: [ptId],  references: [id])
+  @@index([gymId], map: "WorkoutProgress_gymId_fkey")
+  @@index([memberId], map: "WorkoutProgress_memberId_fkey")
+  @@index([ptId], map: "WorkoutProgress_ptId_fkey")
 }
 
+model PtDayOff {
+  id      Int     @id @default(autoincrement())
+  ptId    Int
+  weekday Weekday
+  pt      User    @relation("PtDayOff", fields: [ptId], references: [id])
+
+  @@unique([ptId, weekday])
+}
 
 enum UserRole {
   SUPER_ADMIN
@@ -171,4 +182,20 @@ enum PaymentStatus {
   PENDING
   PAID
   CANCELLED
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum ScheduleStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
 }

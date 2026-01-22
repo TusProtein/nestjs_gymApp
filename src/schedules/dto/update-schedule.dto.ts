@@ -1,3 +1,4 @@
+import { ScheduleStatus } from '@prisma/client';
 import { IsDateString, IsOptional, IsString } from 'class-validator';
 
 export class UpdateScheduleDto {
@@ -11,5 +12,5 @@ export class UpdateScheduleDto {
 
   @IsOptional()
   @IsString()
-  status?: string;
+  status?: ScheduleStatus;
 }
