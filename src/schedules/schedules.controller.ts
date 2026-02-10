@@ -71,8 +71,9 @@ export class SchedulesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateScheduleDto,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.schedulesService.update(id, dto);
+    return this.schedulesService.update(id, dto, req.user);
   }
 
   @Post('cancel/:scheduleId')
@@ -91,13 +92,13 @@ export class SchedulesController {
     return this.schedulesService.completeSchedule(scheduleId, req.user);
   }
 
-  @Post()
-  @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number) {
-    await this.schedulesService.remove(id);
+  // @Post()
+  // @Delete(':id')
+  // async remove(@Param('id', ParseIntPipe) id: number) {
+  //   await this.schedulesService.remove(id);
 
-    return {
-      message: 'Lich tập đã được xóa thành công',
-    };
-  }
+  //   return {
+  //     message: 'Lich tập đã được xóa thành công',
+  //   };
+  // }
 }

@@ -10,7 +10,7 @@ export class UpdateScheduleDto {
   @IsDateString()
   endTime?: string;
 
-  @IsOptional()
-  @IsString()
-  status?: ScheduleStatus;
+  // @IsOptional()
+  // @IsString()
+  // status?: ScheduleStatus;
 }

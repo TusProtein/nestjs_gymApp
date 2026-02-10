@@ -42,6 +42,7 @@ model User {
   workoutPlanAsPT         WorkoutPlan[]     @relation("PtPlans")
   workoutProgressAsMember WorkoutProgress[] @relation("Member_WorkoutProgress")
   workoutProgressAsPT     WorkoutProgress[] @relation("Pt_WorkoutProgress")
+  notificationAsUser      Notification[]    @relation("NotificationAsUser")
 
   @@index([gymId], map: "User_gymId_fkey")
   @@map("User")
@@ -113,12 +114,30 @@ model Schedule {
   updatedAt DateTime       @updatedAt
   member    User           @relation("Member_Schedules", fields: [memberId], references: [id])
   pt        User           @relation("PT_Schedules", fields: [ptId], references: [id])
+
   cancelledBy UserRole?
   cancelledAt DateTime?
   completedAt DateTime?
+  reminderSent Boolean @default(false)
+  reminderSentAt DateTime?
 
   @@index([memberId], map: "Schedule_memberId_fkey")
   @@index([ptId], map: "Schedule_ptId_fkey")
+}
+
+model Notification {
+  id Int @id @default(autoincrement())
+  userId Int
+  title String
+  body String
+  type NotificationType
+  isRead Boolean @default(false)
+  readAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation("NotificationAsUser",fields: [userId], references: [id])
+
+  @@index([userId, isRead])
 }
 
 model Subcription {
@@ -198,4 +217,10 @@ enum ScheduleStatus {
   BOOKED
   CANCELLED
   COMPLETED
+}
+
+enum NotificationType {
+  REMINDER
+  SYSTEM
+  PROMOTION
 }

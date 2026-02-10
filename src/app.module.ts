@@ -12,11 +12,12 @@ import { GymModule } from './gym/gym.module';
 import { SchedulesModule } from './schedules/schedules.module';
 import { RevenueModule } from './revenue/revenue.module';
 import { WorkoutProgressModule } from './workout-progress/workout-progress.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
     PrismaModule,
-    // ScheduleModule.forRoot(), //  bật cron jobs
+    ScheduleModule.forRoot(), //  bật cron jobs
     AuthModule,
     UserModule,
     WorkoutPlansModule,
@@ -26,6 +27,7 @@ import { WorkoutProgressModule } from './workout-progress/workout-progress.modul
     SchedulesModule,
     RevenueModule,
     WorkoutProgressModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

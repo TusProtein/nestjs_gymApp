@@ -4,18 +4,68 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { UserRole, Weekday } from '@prisma/client';
+import { ScheduleStatus, UserRole, Weekday } from '@prisma/client';
 import { JwtPayload } from '~/auth/jwt-payload.interface';
+import { getWeekday, toUtc } from '~/common/utils/date';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AvailablePtDto } from './dto/available-pt.dto';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
+import { Cron } from '@nestjs/schedule';
+import { NotificationsService } from '~/notifications/notifications.service';
 
 const WEEKDAY_KEYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'] as const;
 @Injectable()
 export class SchedulesService {
-  constructor(private readonly prisma: PrismaService) {}
-  //Admin or PT
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationsService,
+  ) {}
+  async assertScheduleCanBeModified(scheduleId: number, user: JwtPayload) {
+    const schedule = await this.prisma.schedule.findFirst({
+      where: {
+        id: scheduleId,
+        OR: [
+          {
+            pt: {
+              id: user.id,
+              gymId: user.gymId,
+            },
+          },
+          {
+            member: {
+              id: user.id,
+              gymId: user.gymId,
+            },
+          },
+        ],
+      },
+    });
+
+    if (!schedule) throw new NotFoundException('Không tìm thấy lịch tập');
+
+    if (schedule.status === 'CANCELLED')
+      throw new BadRequestException('Lịch đã bị hủy');
+
+    if (schedule.status === 'COMPLETED')
+      throw new BadRequestException('Buổi tập đã hoàn thành');
+
+    const now = new Date();
+
+    if (schedule.startTime <= now)
+      throw new BadRequestException('Không thể cập nhật lịch đã diễn ra');
+
+    const diffMs = schedule.startTime.getTime() - now.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    if (diffHours < 1)
+      throw new BadRequestException(
+        'Chỉ được hủy trước giờ tập ít nhất 1 tiếng',
+      );
+
+    return schedule;
+  }
+
   async createSchedule(dto: CreateScheduleDto, user: JwtPayload) {
     const { startTime, endTime } = dto;
 
@@ -46,25 +96,52 @@ export class SchedulesService {
 
     if (!member) throw new BadRequestException('Học viên không thuộc gym này');
 
-    const start = new Date(startTime);
-    const end = new Date(endTime);
+    const now = new Date();
+    const startUtc = toUtc(startTime);
+    const endUtc = toUtc(endTime);
+
+    if (startUtc <= now)
+      throw new BadRequestException(
+        'Không thể tạo lịch ở thời điểm đã diễn ra hoặc hiện tại',
+      );
+
+    if (endUtc <= startUtc)
+      throw new BadRequestException(
+        'Thời gian kết thúc phải sau thời gian bắt đầu',
+      );
+
+    const weekday = getWeekday(startUtc);
+
+    // Check PT nghỉ
+    const ptDayOff = await this.prisma.ptDayOff.findFirst({
+      where: {
+        ptId,
+        weekday,
+      },
+    });
+    if (ptDayOff)
+      throw new BadRequestException(
+        'PT nghỉ ngày này, vui lòng chọn ngày khác',
+      );
 
     // Check pt conflict
     const ptConflict = await this.prisma.schedule.findFirst({
       where: {
         ptId,
-        startTime: { lt: end },
-        endTime: { gt: start },
+        status: ScheduleStatus.BOOKED,
+        startTime: { lt: endUtc },
+        endTime: { gt: startUtc },
       },
     });
     if (ptConflict)
-      throw new BadRequestException('PT đã có lịch trong khung giờ này.');
+      throw new BadRequestException('PT đã có lịch trong khung giờ này');
 
     const memberConflict = await this.prisma.schedule.findFirst({
       where: {
         memberId,
-        startTime: { lt: end },
-        endTime: { gt: start },
+        status: ScheduleStatus.BOOKED,
+        startTime: { lt: endUtc },
+        endTime: { gt: startUtc },
       },
     });
 
@@ -75,8 +152,9 @@ export class SchedulesService {
       data: {
         ptId,
         memberId,
-        startTime: start,
-        endTime: end,
+        startTime: startUtc,
+        endTime: endUtc,
+        status: ScheduleStatus.BOOKED,
       },
       include: {
         pt: true,
@@ -96,15 +174,17 @@ export class SchedulesService {
     await this.prisma.ptDayOff.createMany({
       data: weekdays.map((w) => ({ ptId, weekday: w })),
     });
+
     return {
       message: 'Cập nhật ngày nghỉ thành công',
     };
   }
 
   async getAvailablePts(dto: AvailablePtDto, user: JwtPayload) {
-    const date = new Date(dto.date);
+    const startUtc = toUtc(dto.startAt);
+    const endUtc = toUtc(dto.endAt);
 
-    const weekday = Weekday[WEEKDAY_KEYS[date.getDay()]];
+    const weekday = getWeekday(startUtc);
 
     return this.prisma.user.findMany({
       where: {
@@ -115,9 +195,9 @@ export class SchedulesService {
         // PT đã có lịch trùng giờ
         scheduleAsPT: {
           none: {
-            status: { in: ['BOOKED'] },
-            startTime: { lt: new Date(dto.endTime) },
-            endTime: { gt: new Date(dto.startTime) },
+            status: ScheduleStatus.BOOKED,
+            startTime: { lt: endUtc },
+            endTime: { gt: startUtc },
           },
         },
       },
@@ -156,63 +236,116 @@ export class SchedulesService {
     });
   }
 
-  async update(id: number, dto: UpdateScheduleDto) {
-    const schedule = await this.prisma.schedule.findUnique({
-      where: { id },
-    });
-    if (!schedule) throw new NotFoundException('Lịch tập không tồn tại');
+  async update(id: number, dto: UpdateScheduleDto, user: JwtPayload) {
+    const now = new Date();
+    const { startTime, endTime } = dto;
+    const schedule = await this.assertScheduleCanBeModified(id, user);
 
-    return this.prisma.schedule.update({
+    // Tính giờ mới
+    const newStart = startTime ? new Date(startTime) : schedule.startTime;
+
+    const newEnd = endTime ? new Date(endTime) : schedule.endTime;
+
+    if (newStart > newEnd)
+      throw new BadRequestException('Thời gian không hợp lệ');
+
+    if (newStart <= now)
+      throw new BadRequestException(
+        'Không thể cập nhật lịch về thời điểm đã diễn ra hoặc hiện tại',
+      );
+    // Check PT conflict (trừ chính lịch này)
+    const ptConflict = await this.prisma.schedule.findFirst({
+      where: {
+        id: { not: schedule.id },
+        ptId: schedule.ptId,
+        status: ScheduleStatus.BOOKED,
+        startTime: { lt: newEnd },
+        endTime: { gt: newStart },
+      },
+    });
+
+    if (ptConflict)
+      throw new BadRequestException('PT đã có lịch trong khung giờ này');
+
+    // Check member conflict
+    const memberConflict = await this.prisma.schedule.findFirst({
+      where: {
+        id: { not: schedule.id },
+        memberId: schedule.memberId,
+        status: ScheduleStatus.BOOKED,
+        startTime: { lt: newEnd },
+        endTime: { gt: newStart },
+      },
+    });
+
+    if (memberConflict)
+      throw new BadRequestException('Học viên đã có lịch trong khung giờ này');
+
+    const updated = await this.prisma.schedule.update({
       where: { id },
-      data: dto,
+      data: {
+        startTime: newStart,
+        endTime: newEnd,
+      },
       include: {
         pt: true,
         member: true,
       },
     });
+
+    return {
+      message: 'Cập nhật lịch tập thành công',
+      data: updated,
+    };
   }
 
-  async cancelSchedule(scheduleId: number, user: JwtPayload) {
-    const schedule = await this.prisma.schedule.findFirst({
+  // UC09
+  @Cron('*/5 * * * *')
+  async remindUpcomingSchedules() {
+    const now = new Date();
+    const from = new Date(now.getTime() + 55 * 60 * 1000);
+    const to = new Date(now.getTime() + 60 * 60 * 1000);
+
+    const schedules = await this.prisma.schedule.findMany({
       where: {
-        id: scheduleId,
-        OR: [
-          {
-            pt: {
-              id: user.id,
-              gymId: user.gymId,
-            },
-          },
-          {
-            member: {
-              id: user.id,
-              gymId: user.gymId,
-            },
-          },
-        ],
+        status: ScheduleStatus.BOOKED,
+        reminderSent: false,
+        startTime: {
+          gte: from,
+          lte: to,
+        },
+      },
+      include: {
+        pt: true,
+        member: true,
       },
     });
 
-    if (!schedule) throw new NotFoundException('Không tìm thấy lịch tập');
+    for (const s of schedules) {
+      await this.prisma.$transaction(async (tx) => {
+        await this.notificationService.sendScheduleReminderTx(tx, {
+          memberId: s.memberId,
+          memberName: s.member.name,
+          ptId: s.ptId,
+          ptName: s.pt.name,
+          startTime: s.startTime,
+        });
 
-    if (schedule.status === 'CANCELLED')
-      throw new BadRequestException('Lịch đã bị hủy');
+        await tx.schedule.update({
+          where: { id: s.id },
+          data: {
+            reminderSent: true,
+            reminderSentAt: new Date(),
+          },
+        });
+      });
 
-    if (schedule.status === 'COMPLETED')
-      throw new BadRequestException('Buổi tập đã hoàn thành');
+      console.log(`[CRON] Sent reminder for schedule ${s.id}`);
+    }
+  }
 
-    const now = new Date();
-
-    if (schedule.startTime <= now)
-      throw new BadRequestException('Không thể huỷ lịch đã diễn ra');
-
-    const diffMs = schedule.startTime.getTime() - now.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    if (diffHours < 1)
-      throw new BadRequestException(
-        'Chỉ được hủy trước giờ tập ít nhất 1 tiếng',
-      );
+  async cancelSchedule(scheduleId: number, user: JwtPayload) {
+    const schedule = await this.assertScheduleCanBeModified(scheduleId, user);
 
     const updated = await this.prisma.schedule.update({
       where: { id: scheduleId },
@@ -268,10 +401,10 @@ export class SchedulesService {
     };
   }
 
-  async remove(id: number) {
-    const schedule = await this.prisma.schedule.findUnique({ where: { id } });
-    if (!schedule) throw new BadRequestException('Lịch tập không tồn tại');
+  // async remove(id: number) {
+  //   const schedule = await this.prisma.schedule.findUnique({ where: { id } });
+  //   if (!schedule) throw new BadRequestException('Lịch tập không tồn tại');
 
-    return this.prisma.schedule.delete({ where: { id } });
-  }
+  //   return this.prisma.schedule.delete({ where: { id } });
+  // }
 }
